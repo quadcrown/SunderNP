@@ -1,4 +1,4 @@
--- MySunderAddon.lua
+-- SunderNP.lua
 
 -------------------------------------------------------------------------------
 -- 1) Common Sunder-Tracking Logic
@@ -6,7 +6,7 @@
 local SunderArmorTexture = "Interface\\Icons\\Ability_Warrior_Sunder"
 
 local function GetSunderStacks(unit)
-  -- This version uses the ìweirdî but working logic you found:
+  -- This version uses the ‚Äúweird‚Äù but working logic you found:
   for i = 1, 16 do
     local name, icon, count = UnitDebuff(unit, i)
     if name == SunderArmorTexture then
@@ -128,7 +128,7 @@ end
 -- 4) Decide Which Hook to Use
 -------------------------------------------------------------------------------
 if pfUI and pfUI.nameplates then
-  -- PFUI is present, so hook PFUIís nameplates
+  -- PFUI is present, so hook PFUI‚Äôs nameplates
   HookPfuiNameplates()
 else
   -- Otherwise, fall back to default nameplate scanning
