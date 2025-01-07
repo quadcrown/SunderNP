@@ -1,6 +1,9 @@
 # SunderNP
 
 ## FOR TURTLE WOW
+
+https://github.com/balakethelock/SuperWoW
+
 ## NEEDS SuperWoW TO FUNCTION PROPERLY
 
 Adds sunder armor count to the right of the nameplate, similar to plate addons in classic wow. 
