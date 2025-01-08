@@ -119,10 +119,22 @@ end
 
 local function HookDefaultNameplates()
   local updateFrame = CreateFrame("Frame")
+  updateFrame.tick = 0  -- our simple timer
+
   updateFrame:SetScript("OnUpdate", function()
+    -- If we haven't reached the next time threshold, just return
+    if (this.tick or 0) > GetTime() then 
+      return
+    end
+
+    -- Otherwise, set up our next throttle time
+    this.tick = GetTime() + 0.5 -- 0.5 = interval in seconds
+
+    -- Now do the expensive work
     UpdateDefaultNameplates()
   end)
 end
+
 
 -------------------------------------------------------------------------------
 -- 4) Decide Which Hook to Use
