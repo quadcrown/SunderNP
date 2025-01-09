@@ -13,4 +13,4 @@ Works with default blizzard nameplates and pfUI nameplates currently. If you hav
 ## Hotfix 1/09/25
 - Removed pfUI dependence by using GUIDs without pfUI
 - Performance enhancements
-- Credit to Shagu for providing me guidance for these changes! 
+- Credit to Shagu for providing me guidance for these changes! I am but a novice at making addons and working with lua, and I could have not made this addon without him and those who also have contributed to our Turtle WoW community. 
