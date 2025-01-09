@@ -6,12 +6,11 @@
 local SunderArmorTexture = "Interface\\Icons\\Ability_Warrior_Sunder"
 
 local function GetSunderStacks(unit)
-  -- This version uses the “weird” but working logic you found:
+  -- Sunder stacks
   for i = 1, 16 do
     local name, icon, count = UnitDebuff(unit, i)
     if name == SunderArmorTexture then
-      -- Here "icon" is actually your stack count, so use it
-      return tonumber(icon) or 0
+      return tonumber(icon) or 0  -- icon is actually the stack count
     end
   end
   return 0
@@ -21,10 +20,9 @@ end
 -- 2) If PFUI is Loaded: Hook pfUI Nameplates
 -------------------------------------------------------------------------------
 local function HookPfuiNameplates()
-  -- Make sure pfUI nameplates exist
   if not pfUI or not pfUI.nameplates then return end
 
-  -- Hook OnCreate to add the sunder text
+  -- Hook OnCreate
   local oldOnCreate = pfUI.nameplates.OnCreate
   pfUI.nameplates.OnCreate = function(frame)
     oldOnCreate(frame)
@@ -38,21 +36,21 @@ local function HookPfuiNameplates()
     plate.sunderText = sunderText
   end
 
-  -- Hook OnDataChanged to update sunder text
+  -- Hook OnDataChanged
   local oldOnDataChanged = pfUI.nameplates.OnDataChanged
   pfUI.nameplates.OnDataChanged = function(self, plate)
     oldOnDataChanged(self, plate)
     if not plate or not plate.sunderText then return end
 
-    local guid = plate.parent:GetName(1)
+    local guid = plate.parent:GetName(1)  -- pfUI sets a real GUID here
     if guid and UnitExists(guid) then
       local stacks = GetSunderStacks(guid)
       if stacks > 0 then
         plate.sunderText:SetText(stacks)
         if stacks == 5 then
-          plate.sunderText:SetTextColor(0, 1, 0, 1) -- green
+          plate.sunderText:SetTextColor(0, 1, 0, 1)
         else
-          plate.sunderText:SetTextColor(1, 1, 0, 1) -- yellow
+          plate.sunderText:SetTextColor(1, 1, 0, 1)
         end
       else
         plate.sunderText:SetText("")
@@ -69,48 +67,58 @@ end
 local nameplateCache = {}
 
 local function CreateSunderText(frame)
-  -- 'frame' is the entire Blizzard nameplate frame
-  local healthBar = frame:GetChildren()
-
   local sunderText = frame:CreateFontString(nil, "OVERLAY")
   sunderText:SetFont("Fonts\\FRIZQT__.TTF", 25, "OUTLINE")
-  
-  -- Clear any default anchoring
   sunderText:ClearAllPoints()
-
-  -- Anchor to the RIGHT side of the entire nameplate frame:
-  -- We move it  -5  from the right edge so it's a bit inset.
+  -- Adjust anchor as needed
   sunderText:SetPoint("RIGHT", frame, "RIGHT", 15, 0)
 
-  -- Cache the font string so you can update it later
   nameplateCache[frame] = sunderText
+  return sunderText
 end
 
 local function UpdateDefaultNameplates()
   local frames = { WorldFrame:GetChildren() }
   for _, frame in ipairs(frames) do
     if frame:IsVisible() and frame:GetName() == nil then
-      -- Standard check for a Blizzard nameplate
+      -- Likely a Blizzard nameplate
       local healthBar = frame:GetChildren()
       if healthBar and healthBar:IsObjectType("StatusBar") then
 
-        -- If we haven't created a sunderText for this frame yet, do so
-        if not nameplateCache[frame] then
-          CreateSunderText(frame)
+        -- Ensure we have our sunder text
+        local sunderText = nameplateCache[frame]
+        if not sunderText then
+          sunderText = CreateSunderText(frame)
         end
 
-        -- Show the Sunder count for your current target
-        local stacks = GetSunderStacks("target")
-        local sunderText = nameplateCache[frame]
-        if stacks > 0 then
-          sunderText:SetText(stacks)
-          if stacks == 5 then
-            sunderText:SetTextColor(0, 1, 0, 1) -- Green if 5
+        -- Try reading a GUID from GetName(1)
+        local guid = frame:GetName(1)
+        if guid and guid ~= "0x0000000000000000" and UnitExists(guid) then
+          -- If something (e.g. SuperWoW) actually set this nameplate's GUID
+          local stacks = GetSunderStacks(guid)
+          if stacks > 0 then
+            sunderText:SetText(stacks)
+            if stacks == 5 then
+              sunderText:SetTextColor(0, 1, 0, 1) -- green
+            else
+              sunderText:SetTextColor(1, 1, 0, 1) -- yellow
+            end
           else
-            sunderText:SetTextColor(1, 1, 0, 1) -- Yellow if 1-4
+            sunderText:SetText("")
           end
         else
-          sunderText:SetText("")
+          -- Fallback to "target" if no real GUID is assigned
+          local stacks = GetSunderStacks("target")
+          if stacks > 0 then
+            sunderText:SetText(stacks)
+            if stacks == 5 then
+              sunderText:SetTextColor(0, 1, 0, 1)
+            else
+              sunderText:SetTextColor(1, 1, 0, 1)
+            end
+          else
+            sunderText:SetText("")
+          end
         end
       end
     end
@@ -118,31 +126,21 @@ local function UpdateDefaultNameplates()
 end
 
 local function HookDefaultNameplates()
-  local updateFrame = CreateFrame("Frame")
-  updateFrame.tick = 0  -- our simple timer
+  local updater = CreateFrame("Frame")
+  updater.tick = 0
 
-  updateFrame:SetScript("OnUpdate", function()
-    -- If we haven't reached the next time threshold, just return
-    if (this.tick or 0) > GetTime() then 
-      return
-    end
-
-    -- Otherwise, set up our next throttle time
-    this.tick = GetTime() + 0.5 -- 0.5 = interval in seconds
-
-    -- Now do the expensive work
+  updater:SetScript("OnUpdate", function()
+    if (this.tick or 0) > GetTime() then return end
+    this.tick = GetTime() + 0.5
     UpdateDefaultNameplates()
   end)
 end
-
 
 -------------------------------------------------------------------------------
 -- 4) Decide Which Hook to Use
 -------------------------------------------------------------------------------
 if pfUI and pfUI.nameplates then
-  -- PFUI is present, so hook PFUI’s nameplates
   HookPfuiNameplates()
 else
-  -- Otherwise, fall back to default nameplate scanning
   HookDefaultNameplates()
 end
