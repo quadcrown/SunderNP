@@ -48,9 +48,15 @@ local function HookPfuiNameplates()
       if stacks > 0 then
         plate.sunderText:SetText(stacks)
         if stacks == 5 then
-          plate.sunderText:SetTextColor(0, 1, 0, 1)
-        else
-          plate.sunderText:SetTextColor(1, 1, 0, 1)
+          plate.sunderText:SetTextColor(0, 1, 0, 1) -- green
+        elseif stacks == 4 then
+          plate.sunderText:SetTextColor(0, 0.6, 0, 1) -- green
+        elseif stacks == 3 then
+          plate.sunderText:SetTextColor(1, 1, 0, 1) -- yellow
+        elseif stacks == 2 then
+          plate.sunderText:SetTextColor(1, 0.647, 0, 1) -- orange
+        elseif stacks == 1 then
+          plate.sunderText:SetTextColor(1, 0, 0, 1)
         end
       else
         plate.sunderText:SetText("")
