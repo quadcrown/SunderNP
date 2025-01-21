@@ -78,7 +78,7 @@ local overpowerEndTime = 0
 
 local overpowerOnCooldown = false
 local overpowerCdEndTime  = 0
-
+local overpowerGUID = nil
 local function IsOverpowerActive()
   return overpowerActive and (GetTime() < overpowerEndTime)
 end
@@ -93,7 +93,7 @@ end
 
 -- Listen for events that cause Overpower
 OverpowerFrame:RegisterEvent("COMBAT_TEXT_UPDATE")           -- "SPELL_ACTIVE", Overpower
-OverpowerFrame:RegisterEvent("CHAT_MSG_COMBAT_SELF_MISSES")  -- "dodges"
+OverpowerFrame:RegisterEvent("UNIT_COMBAT")                  --  Parse "UNIT_COMBAT" for DODGE event
 OverpowerFrame:RegisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE")   -- "Your Overpower..."
 
 OverpowerFrame:SetScript("OnEvent", function()
@@ -105,14 +105,13 @@ OverpowerFrame:SetScript("OnEvent", function()
       overpowerEndTime = GetTime() + 4
 
     end
-  elseif event == "CHAT_MSG_COMBAT_SELF_MISSES" then
-    if string.find(msg, "dodges") then
-      if overpowerActive then
-        overpowerEndTime = GetTime() + 4
-      else
-        overpowerActive = true
-        overpowerEndTime = GetTime() + 4
-      end
+  elseif (event == "UNIT_COMBAT") and arg2 == "DODGE" then
+    overpowerGUID = arg1
+    if overpowerActive then
+      overpowerEndTime = GetTime() + 4
+    else
+      overpowerActive = true
+      overpowerEndTime = GetTime() + 4
     end
   elseif event == "CHAT_MSG_SPELL_SELF_DAMAGE" then
     if string.find(msg, "^Your Overpower") then
@@ -122,6 +121,7 @@ OverpowerFrame:SetScript("OnEvent", function()
 
       if overpowerActive then
         overpowerActive = false
+        overpowerGUID = nil  -- Reset overpower target
       end
     end
   end
@@ -131,6 +131,7 @@ OverpowerFrame:SetScript("OnUpdate", function()
   local now = GetTime()
 
   if overpowerActive and now >= overpowerEndTime then
+    overpowerGUID = nil -- Overpower expired, reset
     overpowerActive = false
   end
 
@@ -228,7 +229,7 @@ local function HookPfuiNameplates()
     -- Overpower: only if user has it enabled in SunderNPDB
     if SunderNPDB.overpowerEnabled then
       -- Only show for current target
-      if guid and UnitIsUnit(guid, "target") then
+      if overpowerGUID ~= nil and UnitIsUnit(guid, overpowerGUID) then
         if IsOverpowerActive() then
           plate.overpowerIcon:Show()
           plate.overpowerTimer:Show()
