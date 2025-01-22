@@ -12,7 +12,7 @@ SunderNPDB = SunderNPDB or {}
 
 
 local SunderNP_Defaults = {
-  overpowerEnabled = true,  -- Overpower is on by default
+  overpowerEnabled = false,  -- Overpower is off by default
 }
 
 
