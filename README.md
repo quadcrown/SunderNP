@@ -33,7 +33,7 @@ Works with default blizzard nameplates and pfUI nameplates currently. If you hav
 - Example: You get a dodge, you will see the icon. However, let's say you just used overpower 3 seconds ago and have 2 seconds left on the cooldown, the timer text will display as red now with the icon. Once overpower is off cooldown, it will default back to showing white timer text (signifying you have an available overpower proc, in this case, 2 seconds left).
 - Can be toggled on and off with new commands. Please type /sundernp for available commands
 - Please open an issue if you find problems with it, I have done minimal testing with this feature but based on my testing, it should work as intended without issues.
-- Credits to percs for helping me having this work flawlessly! His commit really made this work exactly as I wanted and he saved me a lot of heartache.
+- <b>Credits to percs for helping me having this work flawlessly! His commit really made this work exactly as I wanted and he saved me a lot of heartache.</b>
 
 ### Overpower display examples
 ![Overpower overlay proc](https://imgur.com/lws9HCG.jpg "Overpower overlay proc") 
