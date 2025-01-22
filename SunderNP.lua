@@ -338,13 +338,13 @@ end
 ------------------------------------------------
 local nameplateCache = {}
 
-
 local function CreatePlateElements(frame)
+  -- 1) Sunder text
   local sunderText = frame:CreateFontString(nil, "OVERLAY")
   sunderText:SetFont("Fonts\\FRIZQT__.TTF", 25, "OUTLINE")
   sunderText:SetPoint("RIGHT", frame, "RIGHT", 15, 0)
 
-
+  -- 2) Overpower icon
   local overpowerIcon = frame:CreateTexture(nil, "OVERLAY")
   overpowerIcon:SetTexture(OverpowerIconTexture)
   overpowerIcon:SetWidth(32)
@@ -352,13 +352,12 @@ local function CreatePlateElements(frame)
   overpowerIcon:SetPoint("TOP", frame, "TOP", 0, 60)
   overpowerIcon:Hide()
 
-
+  -- 3) Overpower timer
   local overpowerTimer = frame:CreateFontString(nil, "OVERLAY")
   overpowerTimer:SetFont("Fonts\\FRIZQT__.TTF", 16, "OUTLINE")
   overpowerTimer:SetPoint("CENTER", overpowerIcon, "CENTER", 0, 0)
   overpowerTimer:SetText("")
   overpowerTimer:Hide()
-
 
   nameplateCache[frame] = {
     sunderText     = sunderText,
@@ -367,13 +366,14 @@ local function CreatePlateElements(frame)
   }
 end
 
-
 local function UpdateDefaultNameplates()
   local frames = { WorldFrame:GetChildren() }
   for _, frame in ipairs(frames) do
+    -- A Blizzard nameplate typically has no global Name and is a visible child
     if frame:IsVisible() and frame:GetName() == nil then
       local healthBar = frame:GetChildren()
       if healthBar and healthBar:IsObjectType("StatusBar") then
+        -- Ensure we have the Sunder/Overpower elements
         if not nameplateCache[frame] then
           CreatePlateElements(frame)
         end
@@ -382,38 +382,69 @@ local function UpdateDefaultNameplates()
         local overpowerIcon  = cache.overpowerIcon
         local overpowerTimer = cache.overpowerTimer
 
+        -- Attempt to read a GUID from frame:GetName(1):
+        local guid = frame:GetName(1)
 
-        -- Usually, current target's nameplate has alpha=1
-        if frame:GetAlpha() == 1 and UnitExists("target") then
-          local stacks = GetSunderStacks("target")
-          if stacks > 0 then
-            sunderText:SetText(stacks)
-            if stacks == 5 then
-              sunderText:SetTextColor(0,1,0,1)
-            else
-              sunderText:SetTextColor(1,1,0,1)
-            end
-          else
-            sunderText:SetText("")
+        ------------------------------------------------
+        -- 1) Sunder Logic with fallback
+        ------------------------------------------------
+        local sunderUnit
+        if guid and guid ~= "0x0000000000000000" and UnitExists(guid) then
+          -- Real GUID assigned => use it
+          sunderUnit = guid
+        else
+          -- Fallback to "target"
+          sunderUnit = "target"
+        end
+
+        local stacks = 0
+        if UnitExists(sunderUnit) then
+          stacks = GetSunderStacks(sunderUnit)
+        end
+
+        if stacks > 0 then
+          sunderText:SetText(stacks)
+          if stacks == 5 then
+            sunderText:SetTextColor(0, 1, 0, 1) -- green
+          elseif stacks == 4 then
+            sunderText:SetTextColor(0, 0.6, 0, 1)
+          elseif stacks == 3 then
+            sunderText:SetTextColor(1, 1, 0, 1) -- yellow
+          elseif stacks == 2 then
+            sunderText:SetTextColor(1, 0.647, 0, 1)
+          elseif stacks == 1 then
+            sunderText:SetTextColor(1, 0, 0, 1)
           end
+        else
+          sunderText:SetText("")
+        end
 
-
-          if SunderNPDB.overpowerEnabled then
+        ------------------------------------------------
+        -- 2) Overpower Logic
+        ------------------------------------------------
+        if not SunderNPDB.overpowerEnabled then
+          -- Overpower disabled => hide
+          overpowerIcon:Hide()
+          overpowerTimer:Hide()
+          overpowerTimer:SetText("")
+        else
+          -- Only show Overpower if we have a valid guid
+          if guid and guid ~= "0x0000000000000000" and guid == castevent.overpowerGUID then
+            -- Overpower is for this specific GUID
             if IsOverpowerActive() then
               overpowerIcon:Show()
               overpowerTimer:Show()
 
-
               if IsOverpowerOnCooldown() then
                 local cdLeft = math.floor(overpowerCdEndTime - GetTime() + 0.5)
-                if cdLeft<0 then cdLeft=0 end
+                if cdLeft < 0 then cdLeft = 0 end
                 overpowerTimer:SetText(cdLeft)
-                overpowerTimer:SetTextColor(1,0,0,1)
+                overpowerTimer:SetTextColor(1, 0, 0, 1) -- red
               else
                 local windowLeft = math.floor(overpowerEndTime - GetTime() + 0.5)
-                if windowLeft<0 then windowLeft=0 end
+                if windowLeft < 0 then windowLeft = 0 end
                 overpowerTimer:SetText(windowLeft)
-                overpowerTimer:SetTextColor(1,1,1,1)
+                overpowerTimer:SetTextColor(1, 1, 1, 1) -- white
               end
             else
               overpowerIcon:Hide()
@@ -421,23 +452,16 @@ local function UpdateDefaultNameplates()
               overpowerTimer:SetText("")
             end
           else
-            -- Overpower disabled
+            -- either no valid GUID or not the Overpower target => hide
             overpowerIcon:Hide()
             overpowerTimer:Hide()
             overpowerTimer:SetText("")
           end
-        else
-          -- not current target => hide
-          sunderText:SetText("")
-          overpowerIcon:Hide()
-          overpowerTimer:Hide()
-          overpowerTimer:SetText("")
         end
       end
     end
   end
 end
-
 
 local function HookDefaultNameplates()
   local updater = CreateFrame("Frame", "SunderNP_DefaultFrame")
@@ -448,7 +472,6 @@ local function HookDefaultNameplates()
     UpdateDefaultNameplates()
   end)
 end
-
 
 ------------------------------------------------
 -- 7) Decide Which Hook
