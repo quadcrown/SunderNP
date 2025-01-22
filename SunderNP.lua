@@ -11,7 +11,7 @@
 SunderNPDB = SunderNPDB or {}
 
 local SunderNP_Defaults = {
-  overpowerEnabled = false,  -- Overpower is on by default
+  overpowerEnabled = false,  -- Overpower is off by default in this snippet
 }
 
 local function SunderNP_Initialize()
@@ -26,12 +26,10 @@ end
 -- 1) Slash Command Handler
 ------------------------------------------------
 local function SunderNP_SlashCommand(msg)
-  -- Force "msg" to be a string
   if type(msg) ~= "string" then
     msg = ""
   end
 
-  -- Convert to lowercase
   msg = string.lower(msg)
 
   if msg == "opon" then
@@ -50,8 +48,12 @@ local function SunderNP_SlashCommand(msg)
   end
 end
 
+SLASH_SUNDERNP1 = "/sundernp"
+SLASH_SUNDERNP2 = "/snp"
+SlashCmdList["SUNDERNP"] = SunderNP_SlashCommand
+
 ------------------------------------------------
--- 2) Register an Event for Initialization
+-- 2) Initialization
 ------------------------------------------------
 local SunderNPFrame = CreateFrame("Frame", "SunderNP_MainFrame")
 SunderNPFrame:RegisterEvent("VARIABLES_LOADED")
@@ -62,22 +64,20 @@ SunderNPFrame:SetScript("OnEvent", function()
   end
 end)
 
--- Create slash commands
-SLASH_SUNDERNP1 = "/sundernp"
-SLASH_SUNDERNP2 = "/snp"
-SlashCmdList["SUNDERNP"] = SunderNP_SlashCommand
-
 ------------------------------------------------
--- 3) Overpower Logic (4s window + 5s cooldown)
+-- 3) Overpower Logic (4s + 5s)
 ------------------------------------------------
 local OverpowerFrame = CreateFrame("Frame", "SunderNP_OverpowerFrame", UIParent)
 
--- Overpower state
-local overpowerActive = false
-local overpowerEndTime = 0
+-- We store Overpower state globally as before:
+local overpowerActive    = false
+local overpowerEndTime   = 0
 
 local overpowerOnCooldown = false
 local overpowerCdEndTime  = 0
+
+-- NEW: We store which GUID had the dodge
+local OverpowerGUID = nil
 
 local function IsOverpowerActive()
   return overpowerActive and (GetTime() < overpowerEndTime)
@@ -85,10 +85,6 @@ end
 
 local function IsOverpowerOnCooldown()
   return overpowerOnCooldown and (GetTime() < overpowerCdEndTime)
-end
-
-local function IsOverpowerUsable()
-  return IsOverpowerActive() and not IsOverpowerOnCooldown()
 end
 
 -- Listen for events that cause Overpower
@@ -103,17 +99,30 @@ OverpowerFrame:SetScript("OnEvent", function()
     if arg1 == "SPELL_ACTIVE" and arg2 == "Overpower" then
       overpowerActive = true
       overpowerEndTime = GetTime() + 4
+      -- We do not know the specific GUID from this event, so we leave OverpowerGUID as is (or nil).
 
+    elseif arg1 == "DODGE" then
+      -- Rarely the client can do "COMBAT_TEXT_UPDATE" "DODGE" for your own target?
+      -- Not always reliable. We'll rely on chat lines instead.
     end
+
   elseif event == "CHAT_MSG_COMBAT_SELF_MISSES" then
     if string.find(msg, "dodges") then
-      if overpowerActive then
-        overpowerEndTime = GetTime() + 4
-      else
-        overpowerActive = true
-        overpowerEndTime = GetTime() + 4
+      -- If the user has a current target with a valid GUID, we store that GUID
+      local _, targetGUID = UnitExists("target")  -- requires superwow
+      if targetGUID and targetGUID ~= "0x0000000000000000" then
+        -- Mark Overpower is active for that target's nameplate
+        OverpowerGUID = targetGUID
+
+        if overpowerActive then
+          overpowerEndTime = GetTime() + 4
+        else
+          overpowerActive   = true
+          overpowerEndTime  = GetTime() + 4
+        end
       end
     end
+
   elseif event == "CHAT_MSG_SPELL_SELF_DAMAGE" then
     if string.find(msg, "^Your Overpower") then
       -- Used Overpower => 5s cooldown
@@ -132,6 +141,7 @@ OverpowerFrame:SetScript("OnUpdate", function()
 
   if overpowerActive and now >= overpowerEndTime then
     overpowerActive = false
+    -- Keep OverpowerGUID around or set it nil if you want to clear it
   end
 
   if overpowerOnCooldown and now >= overpowerCdEndTime then
@@ -148,7 +158,6 @@ local function GetSunderStacks(unit)
   for i = 1, 16 do
     local name, icon, count = UnitDebuff(unit, i)
     if name == SunderArmorTexture then
-      -- "icon" is actually the stack count
       return tonumber(icon) or 0
     end
   end
@@ -156,7 +165,7 @@ local function GetSunderStacks(unit)
 end
 
 ------------------------------------------------
--- 5) pfUI Nameplate Hook
+-- 5) pfUI Nameplates Hook
 ------------------------------------------------
 local OverpowerIconTexture = "Interface\\Icons\\Ability_MeleeDamage"
 
@@ -201,7 +210,7 @@ local function HookPfuiNameplates()
       return
     end
 
-    -- Sunder
+    -- 1) Sunder logic
     local guid = plate.parent:GetName(1)
     if guid and UnitExists(guid) then
       local stacks = GetSunderStacks(guid)
@@ -225,37 +234,39 @@ local function HookPfuiNameplates()
       plate.sunderText:SetText("")
     end
 
-    -- Overpower: only if user has it enabled in SunderNPDB
-    if SunderNPDB.overpowerEnabled then
-      -- Only show for current target
-      if guid and UnitIsUnit(guid, "target") then
-        if IsOverpowerActive() then
-          plate.overpowerIcon:Show()
-          plate.overpowerTimer:Show()
+    -- 2) Overpower
+    if not SunderNPDB.overpowerEnabled then
+      plate.overpowerIcon:Hide()
+      plate.overpowerTimer:Hide()
+      plate.overpowerTimer:SetText("")
+      return
+    end
 
-          if IsOverpowerOnCooldown() then
-            local cdLeft = math.floor(overpowerCdEndTime - GetTime() + 0.5)
-            if cdLeft < 0 then cdLeft = 0 end
-            plate.overpowerTimer:SetText(cdLeft)
-            plate.overpowerTimer:SetTextColor(1, 0, 0, 1) -- red
-          else
-            local windowLeft = math.floor(overpowerEndTime - GetTime() + 0.5)
-            if windowLeft < 0 then windowLeft = 0 end
-            plate.overpowerTimer:SetText(windowLeft)
-            plate.overpowerTimer:SetTextColor(1, 1, 1, 1) -- white
-          end
+    -- If this nameplate's GUID is the one we stored at dodge time
+    if guid and OverpowerGUID and guid == OverpowerGUID then
+      if IsOverpowerActive() then
+        plate.overpowerIcon:Show()
+        plate.overpowerTimer:Show()
+
+        if IsOverpowerOnCooldown() then
+          local cdLeft = math.floor(overpowerCdEndTime - GetTime() + 0.5)
+          if cdLeft < 0 then cdLeft = 0 end
+          plate.overpowerTimer:SetText(cdLeft)
+          plate.overpowerTimer:SetTextColor(1, 0, 0, 1) -- red
         else
-          plate.overpowerIcon:Hide()
-          plate.overpowerTimer:Hide()
-          plate.overpowerTimer:SetText("")
+          local windowLeft = math.floor(overpowerEndTime - GetTime() + 0.5)
+          if windowLeft < 0 then windowLeft = 0 end
+          plate.overpowerTimer:SetText(windowLeft)
+          plate.overpowerTimer:SetTextColor(1, 1, 1, 1) -- white
         end
       else
+        -- not in 4s window => hide
         plate.overpowerIcon:Hide()
         plate.overpowerTimer:Hide()
         plate.overpowerTimer:SetText("")
       end
     else
-      -- Overpower disabled => hide icon/timer
+      -- Different GUID => hide
       plate.overpowerIcon:Hide()
       plate.overpowerTimer:Hide()
       plate.overpowerTimer:SetText("")
@@ -295,8 +306,9 @@ end
 
 local function UpdateDefaultNameplates()
   local frames = { WorldFrame:GetChildren() }
+  local now = GetTime()
   for _, frame in ipairs(frames) do
-    if frame:IsVisible() and frame:GetName() == nil then
+    if frame:IsVisible() and frame:GetName()==nil then
       local healthBar = frame:GetChildren()
       if healthBar and healthBar:IsObjectType("StatusBar") then
         if not nameplateCache[frame] then
@@ -307,12 +319,13 @@ local function UpdateDefaultNameplates()
         local overpowerIcon  = cache.overpowerIcon
         local overpowerTimer = cache.overpowerTimer
 
-        -- Usually, current target's nameplate has alpha=1
-        if frame:GetAlpha() == 1 and UnitExists("target") then
+        local guid = frame:GetName(1)
+        -- Sunder logic (unchanged)
+        if guid and UnitExists(guid) and frame:GetAlpha()==1 then
           local stacks = GetSunderStacks("target")
-          if stacks > 0 then
+          if stacks>0 then
             sunderText:SetText(stacks)
-            if stacks == 5 then
+            if stacks==5 then
               sunderText:SetTextColor(0,1,0,1)
             else
               sunderText:SetTextColor(1,1,0,1)
@@ -320,21 +333,30 @@ local function UpdateDefaultNameplates()
           else
             sunderText:SetText("")
           end
+        else
+          sunderText:SetText("")
+        end
 
-          if SunderNPDB.overpowerEnabled then
+        -- Overpower
+        if not SunderNPDB.overpowerEnabled then
+          overpowerIcon:Hide()
+          overpowerTimer:Hide()
+          overpowerTimer:SetText("")
+        else
+          if guid and OverpowerGUID and guid==OverpowerGUID then
             if IsOverpowerActive() then
               overpowerIcon:Show()
               overpowerTimer:Show()
 
               if IsOverpowerOnCooldown() then
-                local cdLeft = math.floor(overpowerCdEndTime - GetTime() + 0.5)
+                local cdLeft = math.floor(overpowerCdEndTime - now+0.5)
                 if cdLeft<0 then cdLeft=0 end
                 overpowerTimer:SetText(cdLeft)
                 overpowerTimer:SetTextColor(1,0,0,1)
               else
-                local windowLeft = math.floor(overpowerEndTime - GetTime() + 0.5)
-                if windowLeft<0 then windowLeft=0 end
-                overpowerTimer:SetText(windowLeft)
+                local wLeft = math.floor(overpowerEndTime - now+0.5)
+                if wLeft<0 then wLeft=0 end
+                overpowerTimer:SetText(wLeft)
                 overpowerTimer:SetTextColor(1,1,1,1)
               end
             else
@@ -343,17 +365,11 @@ local function UpdateDefaultNameplates()
               overpowerTimer:SetText("")
             end
           else
-            -- Overpower disabled
+            -- not the GUID that dodged => hide
             overpowerIcon:Hide()
             overpowerTimer:Hide()
             overpowerTimer:SetText("")
           end
-        else
-          -- not current target => hide
-          sunderText:SetText("")
-          overpowerIcon:Hide()
-          overpowerTimer:Hide()
-          overpowerTimer:SetText("")
         end
       end
     end
@@ -362,10 +378,10 @@ end
 
 local function HookDefaultNameplates()
   local updater = CreateFrame("Frame", "SunderNP_DefaultFrame")
-  updater.tick = 0
+  updater.tick=0
   updater:SetScript("OnUpdate", function()
-    if (this.tick or 0) > GetTime() then return end
-    this.tick = GetTime() + 0.5
+    if (this.tick or 0)>GetTime() then return end
+    this.tick=GetTime()+0.5
     UpdateDefaultNameplates()
   end)
 end
