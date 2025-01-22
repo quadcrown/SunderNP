@@ -3,5 +3,6 @@
 ## Notes: Adds a sunder armor count to the right of your nameplates. Works with default and pfUI nameplates
 ## Author: Quad Crown
 ## Version: 1.0
+## SavedVariables: SunderNPDB
 ## OptionalDeps: pfUI
 SunderNP.lua
