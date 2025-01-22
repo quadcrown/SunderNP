@@ -458,4 +458,3 @@ if pfUI and pfUI.nameplates then
 else
   HookDefaultNameplates()
 end
-
