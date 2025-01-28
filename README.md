@@ -44,6 +44,7 @@ Works with default blizzard nameplates and pfUI nameplates currently. If you hav
 - Will not appear if on cooldown. However, if within 3 seconds of coming off cooldown, it will show the cooldown time with the icon
 - If within 8 to 10 yards, it will show an icon with a 30% opacity to show leeway. This means if you are moving or jumping, your whirlwind will hit the mob. If you are moving in the 8 to 10 yard distance, it will appear at 100% opacity as if you're in range (movement detection).
 - This will not function without UnitXP_SP3 v22 or greater. There is a function built in that checks for UnitXP and the version. Therefore, this addon as a whole is still useable if you do not have UnitXP, you just will not be able to use new Whirlwind function. https://github.com/allfoxwy/UnitXP_SP3/releases
+- Fixed whirlwind icon when showing cooldown text appearing on every nameplate unless in range **1/28/25**
 
 ### Whirlwind display examples
 
