@@ -402,7 +402,6 @@ local function ArrangeIconsCentered(iconList, parent, offsetY)
   end
 end
 
-------------------------------------------------
 -- 7) pfUI Nameplate Hook
 ------------------------------------------------
 local OverpowerIconTexture  = "Interface\\Icons\\Ability_MeleeDamage"
@@ -465,7 +464,7 @@ local function HookPfuiNameplates()
 
     local guid = plate.parent:GetName(1)
 
-    -- [NEW] Filter out friendly units or critters:
+    -- Filter out friendly units or critters
     if guid and UnitExists(guid) then
       if UnitIsFriend("player", guid) or (UnitCreatureType(guid) == "Critter") then
         plate:Hide()
@@ -498,27 +497,27 @@ local function HookPfuiNameplates()
       plate.sunderText:SetText("")
     end
 
-    local iconsToShow={}
+    local iconsToShow = {}
 
     -- Overpower
     if SunderNPDB.overpowerEnabled and guid and guid==castevent.overpowerGUID then
       if IsOverpowerActive() then
         plate.overpowerIcon:Show()
         plate.overpowerTimer:Show()
-        local data={ icon= plate.overpowerIcon }
+        local data = { icon = plate.overpowerIcon }
 
         if IsOverpowerOnCooldown() then
-          local cdLeft= math.floor(overpowerCdEndTime - GetTime()+0.5)
-          if cdLeft<0 then cdLeft=0 end
+          local cdLeft = math.floor(overpowerCdEndTime - GetTime() + 0.5)
+          if cdLeft < 0 then cdLeft = 0 end
           plate.overpowerTimer:SetText(cdLeft)
           plate.overpowerTimer:SetTextColor(1,0,0,1)
         else
-          local wLeft= math.floor(overpowerEndTime - GetTime()+0.5)
-          if wLeft<0 then wLeft=0 end
+          local wLeft= math.floor(overpowerEndTime - GetTime() + 0.5)
+          if wLeft < 0 then wLeft = 0 end
           plate.overpowerTimer:SetText(wLeft)
           plate.overpowerTimer:SetTextColor(1,1,1,1)
         end
-        data.timerFS= plate.overpowerTimer
+        data.timerFS = plate.overpowerTimer
         table.insert(iconsToShow, data)
       else
         plate.overpowerIcon:Hide()
@@ -534,18 +533,27 @@ local function HookPfuiNameplates()
     -- Whirlwind
     if SunderNPDB.whirlwindEnabled then
       local cdLeft = GetWWCooldownLeft()
-      if cdLeft>3 then
+      if cdLeft > 3 then
         plate.wwIcon:Hide()
         plate.wwTimer:Hide()
         plate.wwTimer:SetText("")
-      elseif cdLeft>0 then
-        plate.wwIcon:SetAlpha(1)
-        plate.wwIcon:Show()
-        plate.wwTimer:Show()
-        plate.wwTimer:SetTextColor(1,0,0,1)
-        plate.wwTimer:SetText(tostring(math.floor(cdLeft)))
-        table.insert(iconsToShow,{ icon=plate.wwIcon, timerFS=plate.wwTimer })
+      elseif cdLeft > 0 then
+        -- [NEW] Distance check even during 0-3s cooldown
+        local alpha = GetWhirlwindAlphaForGUID(guid)
+        if alpha > 0 then
+          plate.wwIcon:SetAlpha(1)
+          plate.wwIcon:Show()
+          plate.wwTimer:Show()
+          plate.wwTimer:SetTextColor(1,0,0,1)
+          plate.wwTimer:SetText(tostring(math.floor(cdLeft)))
+          table.insert(iconsToShow,{ icon=plate.wwIcon, timerFS=plate.wwTimer })
+        else
+          plate.wwIcon:Hide()
+          plate.wwTimer:Hide()
+          plate.wwTimer:SetText("")
+        end
       else
+        -- cdLeft <= 0 => range-based alpha
         local alpha= GetWhirlwindAlphaForGUID(guid)
         if alpha>0 then
           plate.wwIcon:SetAlpha(alpha)
@@ -633,7 +641,7 @@ local function UpdateDefaultNameplates()
 
         local guid = frame:GetName(1)
 
-        -- [NEW] Filter out friendly units or critters:
+        -- Filter out friendly units or critters:
         if guid and UnitExists(guid) then
           if UnitIsFriend("player", guid) or (UnitCreatureType(guid) == "Critter") then
             frame:Hide()
@@ -709,13 +717,22 @@ local function UpdateDefaultNameplates()
                 wwTimer:Hide()
                 wwTimer:SetText("")
               elseif cdLeft>0 then
-                wwIcon:SetAlpha(1)
-                wwIcon:Show()
-                wwTimer:Show()
-                wwTimer:SetTextColor(1,0,0,1)
-                wwTimer:SetText(tostring(math.floor(cdLeft)))
-                table.insert(iconsToShow,{ icon=wwIcon, timerFS=wwTimer })
+                -- [NEW] Distance check for 0-3s cooldown
+                local alpha= GetWhirlwindAlphaForGUID(guid)
+                if alpha>0 then
+                  wwIcon:SetAlpha(1)
+                  wwIcon:Show()
+                  wwTimer:Show()
+                  wwTimer:SetTextColor(1,0,0,1)
+                  wwTimer:SetText(tostring(math.floor(cdLeft)))
+                  table.insert(iconsToShow,{ icon=wwIcon, timerFS=wwTimer })
+                else
+                  wwIcon:Hide()
+                  wwTimer:Hide()
+                  wwTimer:SetText("")
+                end
               else
+                -- cdLeft <= 0 => range-based alpha
                 local alpha= GetWhirlwindAlphaForGUID(guid)
                 if alpha>0 then
                   wwIcon:SetAlpha(alpha)
@@ -729,6 +746,7 @@ local function UpdateDefaultNameplates()
                   wwTimer:SetText("")
                 end
               end
+
             else
               wwIcon:Hide()
               wwTimer:Hide()
