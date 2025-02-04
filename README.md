@@ -1,5 +1,9 @@
 # SunderNP
 
+## Please use the previous version if you do not have UNITXP_SP3 until I fix the current issues with it not working without it.
+
+https://github.com/quadcrown/SunderNP/tree/d431f9f00ea48ee0b9045575ada1f5307f8809c4
+
 ## FOR TURTLE WOW
 
 https://github.com/balakethelock/SuperWoW
