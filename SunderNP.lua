@@ -36,13 +36,15 @@ end
 local SunderNP_Defaults = {
   overpowerEnabled = false, -- Overpower off by default
   whirlwindEnabled = false, -- Whirlwind detection off by default
+  executeEnabled = false,   -- Execute tracking off by default [NEW]
+  targetingArrowEnabled = false, -- Targeting arrow off by default
 }
 
 function EnforceWWIconCap()
   local activeList = {}
   -- Gather PFUI nameplates by iterating over global names "pfNamePlate1" ... "pfNamePlate100"
   local g = getfenv(0)
-  for i = 1, 100 do
+  for i = 1, 20 do
     local plate = g["pfNamePlate" .. i]
     if plate and plate.wwIcon then
       local guid = (plate.parent and plate.parent:GetName(1)) or nil
@@ -139,6 +141,22 @@ local function SunderNP_SlashCommand(msg)
     SunderNPDB.whirlwindEnabled = false
     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[SunderNP]|r Whirlwind range detection: |cffff0000DISABLED|r.")
 
+  elseif msg == "exeon" then
+    SunderNPDB.executeEnabled = true
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[SunderNP]|r Execute tracking: |cff00ff00ENABLED|r.")
+
+  elseif msg == "exeoff" then
+    SunderNPDB.executeEnabled = false
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[SunderNP]|r Execute tracking: |cffff0000DISABLED|r.")
+
+  elseif msg == "arrowon" then
+    SunderNPDB.targetingArrowEnabled = true
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[SunderNP]|r Targeting arrow: |cff00ff00ENABLED|r.")
+
+  elseif msg == "arrowoff" then
+    SunderNPDB.targetingArrowEnabled = false
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[SunderNP]|r Targeting arrow: |cffff0000DISABLED|r.")
+
   -- Existing branch for Blizzard default nameplates:
   elseif msg == "defaultnp" then
     local count = 0
@@ -154,7 +172,7 @@ local function SunderNP_SlashCommand(msg)
   elseif msg == "pfuinp" then
     local count = 0
     local g = getfenv(0)  -- get the global environment
-    for i = 1, 100 do  -- adjust the upper limit as needed
+    for i = 1, 20 do  -- adjust the upper limit as needed
       local plate = g["pfNamePlate" .. i]
       if plate and plate:IsShown() then
         count = count + 1
@@ -169,6 +187,10 @@ local function SunderNP_SlashCommand(msg)
     DEFAULT_CHAT_FRAME:AddMessage("  /sundernp opoff      -> disable Overpower icon")
     DEFAULT_CHAT_FRAME:AddMessage("  /sundernp wwon       -> enable Whirlwind range detection")
     DEFAULT_CHAT_FRAME:AddMessage("  /sundernp wwoff      -> disable Whirlwind range detection")
+    DEFAULT_CHAT_FRAME:AddMessage("  /sundernp exeon      -> enable Execute tracking")  -- [NEW]
+    DEFAULT_CHAT_FRAME:AddMessage("  /sundernp exeoff     -> disable Execute tracking") -- [NEW]
+    DEFAULT_CHAT_FRAME:AddMessage("  /sundernp arrowon    -> enable Targeting arrow")
+    DEFAULT_CHAT_FRAME:AddMessage("  /sundernp arrowoff   -> disable Targeting arrow")
     DEFAULT_CHAT_FRAME:AddMessage("  /sundernp defaultnp  -> display number of Blizzard default nameplates detected")
     DEFAULT_CHAT_FRAME:AddMessage("  /sundernp pfuinp     -> display number of PFUI nameplates detected (via globals)")
     DEFAULT_CHAT_FRAME:AddMessage("  /sundernp help       -> this help text")
@@ -376,6 +398,17 @@ local function GetSunderStacks(unit)
   return 0
 end
 
+local ExposeArmorTexture = "Interface\\Icons\\Ability_Warrior_Riposte"
+local function HasExposeArmor(unit)
+  for i = 1, 16 do
+    local name, _, _ = UnitDebuff(unit, i)
+    if name == ExposeArmorTexture then
+      return true
+    end
+  end
+  return false
+end
+
 ------------------------------------------------
 -- 5) Whirlwind Range + Movement (like MagePlates)
 ------------------------------------------------
@@ -457,6 +490,15 @@ local function GetWhirlwindAlphaForGUID(guid)
   end
 end
 
+local function IsExecutable(unit)
+  if not unit or not UnitExists(unit) then return false end
+  local health = UnitHealth(unit)
+  local maxHealth = UnitHealthMax(unit)
+  if maxHealth == 0 then return false end
+  local healthPercent = (health / maxHealth) * 100
+  return healthPercent <= 20
+end
+
 ------------------------------------------------
 -- 6) Icon Layout: center horizontally
 ------------------------------------------------
@@ -481,6 +523,7 @@ end
 ------------------------------------------------
 local OverpowerIconTexture  = "Interface\\Icons\\Ability_MeleeDamage"
 local WhirlwindIconTexture  = "Interface\\Icons\\Ability_Whirlwind"
+local ExecuteIconTexture     = "Interface\\Icons\\INV_Sword_48" 
 
 
 
@@ -524,11 +567,27 @@ local function HookPfuiNameplates()
     wwTimer:SetText("")
     wwTimer:Hide()
     plate.wwTimer = wwTimer
+
+    local executeIcon = plate.health:CreateTexture(nil, "OVERLAY")
+    executeIcon:SetTexture(ExecuteIconTexture)
+    executeIcon:SetWidth(32)
+    executeIcon:SetHeight(32)
+    executeIcon:Hide()
+    plate.executeIcon = executeIcon
+
+    local targetingArrow = plate.health:CreateTexture(nil, "OVERLAY")
+    targetingArrow:SetTexture("Interface\\AddOns\\SunderNP\\Textures\\targeting-markedit.tga")
+    targetingArrow:SetWidth(96)
+    targetingArrow:SetHeight(96)
+    targetingArrow:SetPoint("TOP", plate.health, "TOP", 0, 120)
+    targetingArrow:Hide()
+    plate.targetingArrow = targetingArrow
   end
 
   if UpdateTimer < 0 then
     UpdateTimer = UnitXP("timer", "arm", 1000, 1000, "EnforceWWIconCap")
   end
+
   local oldOnDataChanged = pfUI.nameplates.OnDataChanged
   pfUI.nameplates.OnDataChanged = function(self, plate)
     oldOnDataChanged(self, plate)
@@ -547,23 +606,29 @@ local function HookPfuiNameplates()
       end
     end
 
+    -- [MODIFIED] Check for Expose Armor first, then Sunder
     if guid and UnitExists(guid) then
-      local stacks = GetSunderStacks(guid)
-      if stacks > 0 then
-        plate.sunderText:SetText(stacks)
-        if stacks == 5 then
-          plate.sunderText:SetTextColor(0, 1, 0, 1)
-        elseif stacks == 4 then
-          plate.sunderText:SetTextColor(0, 0.6, 0, 1)
-        elseif stacks == 3 then
-          plate.sunderText:SetTextColor(1, 1, 0, 1)
-        elseif stacks == 2 then
-          plate.sunderText:SetTextColor(1, 0.647, 0, 1)
-        elseif stacks == 1 then
-          plate.sunderText:SetTextColor(1, 0, 0, 1)
-        end
+      if HasExposeArmor(guid) then
+        plate.sunderText:SetText("IEA")
+        plate.sunderText:SetTextColor(0, 1, 0, 1)  -- Green color
       else
-        plate.sunderText:SetText("")
+        local stacks = GetSunderStacks(guid)
+        if stacks > 0 then
+          plate.sunderText:SetText(stacks)
+          if stacks == 5 then
+            plate.sunderText:SetTextColor(0, 1, 0, 1)
+          elseif stacks == 4 then
+            plate.sunderText:SetTextColor(0, 0.6, 0, 1)
+          elseif stacks == 3 then
+            plate.sunderText:SetTextColor(1, 1, 0, 1)
+          elseif stacks == 2 then
+            plate.sunderText:SetTextColor(1, 0.647, 0, 1)
+          elseif stacks == 1 then
+            plate.sunderText:SetTextColor(1, 0, 0, 1)
+          end
+        else
+          plate.sunderText:SetText("")
+        end
       end
     else
       plate.sunderText:SetText("")
@@ -640,9 +705,31 @@ local function HookPfuiNameplates()
       plate.wwTimer:SetText("")
     end
 
+    if SunderNPDB.executeEnabled and guid and UnitExists(guid) then
+      if IsExecutable(guid) then
+        plate.executeIcon:Show()
+        table.insert(iconsToShow, { icon = plate.executeIcon })
+      else
+        plate.executeIcon:Hide()
+      end
+    else
+      if plate.executeIcon then
+        plate.executeIcon:Hide()
+      end
+    end
+
+    if SunderNPDB.targetingArrowEnabled and guid and UnitExists(guid) and UnitIsUnit(guid, "target") then
+      plate.targetingArrow:Show()
+    else
+      if plate.targetingArrow then
+        plate.targetingArrow:Hide()
+      end
+    end
+
     ArrangeIconsCentered(iconsToShow, plate.health, 60)
   end
 end
+
 
 ------------------------------------------------
 -- 8) Default Blizzard Nameplates
@@ -675,12 +762,28 @@ local function CreatePlateElements(frame)
   wwTimer:SetText("")
   wwTimer:Hide()
 
+  -- [NEW] Execute icon
+  local executeIcon = frame:CreateTexture(nil, "OVERLAY")
+  executeIcon:SetTexture(ExecuteIconTexture)
+  executeIcon:SetWidth(32)
+  executeIcon:SetHeight(32)
+  executeIcon:Hide()
+
+  local targetingArrow = frame:CreateTexture(nil, "OVERLAY")
+  targetingArrow:SetTexture("Interface\\AddOns\\SunderNP\\Textures\\targeting-markedit.tga")
+  targetingArrow:SetWidth(32)
+  targetingArrow:SetHeight(32)
+  targetingArrow:SetPoint("TOP", frame, "TOP", 0, 100)
+  targetingArrow:Hide()
+
   nameplateCache[frame] = {
     sunderText = sunderText,
     overpowerIcon = overpowerIcon,
     overpowerTimer = overpowerTimer,
     wwIcon = wwIcon,
     wwTimer = wwTimer,
+    executeIcon = executeIcon,  -- [NEW]
+    targetingArrow = targetingArrow,
   }
 end
 
@@ -699,6 +802,7 @@ local function UpdateDefaultNameplates()
         local opTimer = cache.overpowerTimer
         local wwIcon = cache.wwIcon
         local wwTimer = cache.wwTimer
+        local exeIcon = cache.executeIcon
 
         local guid = frame:GetName(1)
         if guid and UnitExists(guid) then
@@ -707,20 +811,30 @@ local function UpdateDefaultNameplates()
           else
             frame:Show()
             local sunderUnit = (guid and guid ~= "0x0000000000000000" and UnitExists(guid)) and guid or "target"
-            local stacks = 0
-            if UnitExists(sunderUnit) then stacks = GetSunderStacks(sunderUnit) end
-            if stacks > 0 then
-              sunderText:SetText(stacks)
-              if stacks == 5 then
-                sunderText:SetTextColor(0, 1, 0, 1)
-              elseif stacks == 4 then
-                sunderText:SetTextColor(0, 0.6, 0, 1)
-              elseif stacks == 3 then
-                sunderText:SetTextColor(1, 1, 0, 1)
-              elseif stacks == 2 then
-                sunderText:SetTextColor(1, 0.647, 0, 1)
-              elseif stacks == 1 then
-                sunderText:SetTextColor(1, 0, 0, 1)
+            
+            -- [MODIFIED] Check for Expose Armor first, then Sunder
+            if UnitExists(sunderUnit) then
+              if HasExposeArmor(sunderUnit) then
+                sunderText:SetText("IEA")
+                sunderText:SetTextColor(0, 1, 0, 1)  -- Green color
+              else
+                local stacks = GetSunderStacks(sunderUnit)
+                if stacks > 0 then
+                  sunderText:SetText(stacks)
+                  if stacks == 5 then
+                    sunderText:SetTextColor(0, 1, 0, 1)
+                  elseif stacks == 4 then
+                    sunderText:SetTextColor(0, 0.6, 0, 1)
+                  elseif stacks == 3 then
+                    sunderText:SetTextColor(1, 1, 0, 1)
+                  elseif stacks == 2 then
+                    sunderText:SetTextColor(1, 0.647, 0, 1)
+                  elseif stacks == 1 then
+                    sunderText:SetTextColor(1, 0, 0, 1)
+                  end
+                else
+                  sunderText:SetText("")
+                end
               end
             else
               sunderText:SetText("")
@@ -795,6 +909,27 @@ local function UpdateDefaultNameplates()
               wwIcon:Hide()
               wwTimer:Hide()
               wwTimer:SetText("")
+            end
+
+            if SunderNPDB.executeEnabled and guid and UnitExists(guid) then
+              if IsExecutable(guid) then
+                exeIcon:Show()
+                table.insert(iconsToShow, { icon = exeIcon })
+              else
+                exeIcon:Hide()
+              end
+            else
+              if exeIcon then
+                exeIcon:Hide()
+              end
+            end
+
+            if SunderNPDB.targetingArrowEnabled and guid and UnitExists(guid) and UnitIsUnit(guid, "target") then
+              cache.targetingArrow:Show()
+            else
+              if cache.targetingArrow then
+                cache.targetingArrow:Hide()
+              end
             end
 
             ArrangeIconsCentered(iconsToShow, frame, 60)
